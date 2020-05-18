@@ -315,39 +315,14 @@ void CAN1_SCE_IRQHandler(void)
 
 /* USER CODE BEGIN 1 */
 
-void HAL_CAN_TxCpltCallback(CAN_HandleTypeDef* hcan)
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan)
 {
-  // LOG("CAN transmisison complete");
-  // canpybara_can_tx_ready(hcan);
-  canpybara_can_tx_complete();
-}
-
-void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan)
-{
-  // LOG("Received CAN message");
-
   canpybara_can_rx(hcan);
-}
-
-void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
-{
-  canpybara_can_error();
-
-  __HAL_CAN_CLEAR_FLAG(hcan, CAN_FLAG_FOV0);
-  HAL_CAN_Receive_IT(hcan, CAN_FIFO0);
-  // LOG("CAN error");
 }
 
 void HAL_RCC_CSSCallback(void)
 {
   LOG("Ceramic resonator has failed");
-}
-
-void HAL_SYSTICK_Callback(void)
-{
-  #ifdef WIEGAND_ENABLED
-  canpybara_wiegand_systick_interrupt();
-  #endif
 }
 
 /* USER CODE END 1 */

@@ -8,12 +8,6 @@
 extern CAN_HandleTypeDef hcan;
 extern IWDG_HandleTypeDef hiwdg;
 
-CanTxMsgTypeDef hcan_CAN_Tx;
-
-CanRxMsgTypeDef hcan_CAN_Rx0;
-CanRxMsgTypeDef hcan_CAN_Rx1;
-
-
 uint16_t canpybara_can_get_my_address(void)
 {
 	uint16_t result = 0;
@@ -34,7 +28,7 @@ uint16_t canpybara_can_get_my_address(void)
 	if(result == 0)
 	{
 		LOG("Invalid module address: %d", result);
-		_Error_Handler(__FILE__, __LINE__);
+		Error_Handler();
 	}
 
 	return result;
@@ -58,8 +52,8 @@ void canpybara_configure_filters(CAN_HandleTypeDef* hcan)
 {
 	uint16_t my_address = canpybara_can_get_my_address();
 
-	CAN_FilterConfTypeDef filter_config;
-	filter_config.FilterNumber = 0;
+	CAN_FilterTypeDef filter_config;
+	filter_config.FilterBank = 0;
 	filter_config.FilterMode = CAN_FILTERMODE_IDMASK;
 	filter_config.FilterScale = CAN_FILTERSCALE_16BIT;
 
@@ -75,27 +69,14 @@ void canpybara_configure_filters(CAN_HandleTypeDef* hcan)
 
 	filter_config.FilterFIFOAssignment = CAN_FILTER_FIFO0;
 	filter_config.FilterActivation = ENABLE;
-	filter_config.BankNumber = 0;
 
 	HAL_StatusTypeDef result = HAL_CAN_ConfigFilter(hcan, &filter_config);
 
 	LOG("Configuring CAN filters my_addr: %d, status: %d", my_address, result);
 	if(result != HAL_OK)
 	{
-		_Error_Handler(__FILE__, __LINE__);
-	}
-}
-
-void canpybara_reload_canrx(CAN_HandleTypeDef* hcan)
-{
-	__HAL_UNLOCK(hcan);
-	HAL_StatusTypeDef result = HAL_CAN_Receive_IT(hcan, CAN_FIFO0);
-
-	if(result != HAL_OK)
-	{
-		LOG("CAN REGISTER STATUS: %"PRIu32, hcan->State);
-		LOG("CAN_Receive_IT called status: %d", result);
-		_Error_Handler(__FILE__, __LINE__);
+		LOG("Error configuring CAN filter");
+		Error_Handler();
 	}
 }
 
@@ -103,52 +84,73 @@ void canpybara_can_init(void)
 {
 	LOG("Initializing CAN");
 
-	hcan.pRxMsg = &hcan_CAN_Rx0;
-	hcan.pRx1Msg = &hcan_CAN_Rx1;
-
 	canpybara_configure_filters(&hcan);
-	canpybara_reload_canrx(&hcan);
+
+	if(HAL_CAN_Start(&hcan) != HAL_OK)
+	{
+		LOG("Error starting CAN");
+		Error_Handler();
+	}
+
+	if(HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+	{
+		LOG("Error activating CAN notification");
+		Error_Handler();
+	}
 }
 
+
+// TODO: Remove or make these counters really count things..
 void capybara_can_report_status(void)
 {
-	static CanTxMsgTypeDef can_tx;
-	can_tx.StdId = CANPYBARA_REPORT_STATUS;
-	can_tx.ExtId = 0;
-	can_tx.IDE = CAN_ID_STD;
-	can_tx.RTR = CAN_RTR_DATA;
+	CAN_TxHeaderTypeDef can_tx_header;
+	uint8_t can_tx_data[8];
 
-	can_tx.DLC = 7;
+	can_tx_header.StdId = CANPYBARA_REPORT_STATUS;
+	can_tx_header.ExtId = 0;
+	can_tx_header.IDE = CAN_ID_STD;
+	can_tx_header.RTR = CAN_RTR_DATA;
+	can_tx_header.DLC = 7;
+	can_tx_header.TransmitGlobalTime = DISABLE;
+
 	int i = 0;
-	can_tx.Data[i++] = 0x02; // bootloader
+	can_tx_data[i++] = 0x02; // bootloader
 
 	// TX
-	can_tx.Data[i++] = canpybara_tx_frames >> 8;
-	can_tx.Data[i++] = canpybara_tx_frames;
+	can_tx_data[i++] = canpybara_tx_frames >> 8;
+	can_tx_data[i++] = canpybara_tx_frames;
 
 	// RX
-	can_tx.Data[i++] = canpybara_rx_frames >> 8;
-	can_tx.Data[i++] = canpybara_rx_frames;
+	can_tx_data[i++] = canpybara_rx_frames >> 8;
+	can_tx_data[i++] = canpybara_rx_frames;
 
 	// ERR
-	can_tx.Data[i++] = canpybara_errors >> 8;
-	can_tx.Data[i++] = canpybara_errors;
+	can_tx_data[i++] = canpybara_errors >> 8;
+	can_tx_data[i++] = canpybara_errors;
 
-	canpybara_can_tx(&can_tx);
+	canpybara_can_tx(&can_tx_header, can_tx_data);
 }
 
 void canpybara_can_rx(CAN_HandleTypeDef* hcan)
 {
 	canpybara_rx_frames++;
 
-	int request_id = CANPYBARA_CONTROLLER_REQUESTID(hcan->pRxMsg->StdId);
+	CAN_RxHeaderTypeDef can_rx_header;
+	uint8_t can_rx_data[8];
+	if(HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, can_rx_data) != HAL_OK)
+	{
+		LOG("Error when getting CAN rx message");
+		Error_Handler();
+	}
 
-	LOG("Request id: %d for %"PRIu32, request_id, hcan->pRxMsg->StdId);
+	int request_id = CANPYBARA_CONTROLLER_REQUESTID(can_rx_header.StdId);
+
+	LOG("Request id: %d for %"PRIu32, request_id, can_rx_header.StdId);
 
 	switch(request_id)
 	{
 		case CANPYBARA_REQUEST_STATUS:
-			if (hcan->pRxMsg->RTR == CAN_RTR_REMOTE)
+			if (can_rx_header.RTR == CAN_RTR_REMOTE)
 			{
 				capybara_can_report_status();
 			}
@@ -164,36 +166,30 @@ void canpybara_can_rx(CAN_HandleTypeDef* hcan)
 			break;
 
 		case CANPYBARA_REQUEST_BOOTLOADER_ERASE:
-			if (hcan->pRxMsg->DLC == 4)
+			if (can_rx_header.DLC == 4)
 			{
-				canpybara_bootloader_erase(*((uint32_t*)hcan->pRxMsg->Data));
+				canpybara_bootloader_erase(*((uint32_t*)can_rx_data));
 			}
 			break;
 
 		case CANPYBARA_REQUEST_BOOTLOADER_WRITE:
-			if (hcan->pRxMsg->DLC == 8)
+			if (can_rx_header.DLC == 8)
 			{
-				canpybara_bootloader_write(*((uint64_t*)hcan->pRxMsg->Data));
+				canpybara_bootloader_write(*((uint64_t*)can_rx_data));
 			}
 			break;
 
 		default:
 			LOG("Unknown request ID: %d", request_id);
 	}
-	
-	canpybara_reload_canrx(hcan);
 }
 
-
-void canpybara_can_tx(CanTxMsgTypeDef *can_tx)
+void canpybara_can_tx(CAN_TxHeaderTypeDef* can_tx_header, uint8_t data[8])
 {
-	hcan.pTxMsg = can_tx;
-
-	if(HAL_CAN_Transmit(&hcan, 100) != HAL_OK)
+	uint32_t mailbox_no;
+	if(HAL_CAN_AddTxMessage(&hcan, can_tx_header, data, &mailbox_no) != HAL_OK)
 	{
-		LOG("Can transmit failure");
-		canpybara_can_error();
+		LOG("CAN add message failure");
+		Error_Handler();
 	}
-
-	canpybara_can_tx_complete();
 }

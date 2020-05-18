@@ -343,7 +343,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
 
-  LOG("ERROR HANDLER -> %s:%d", file, line);
+  LOG("ERROR HANDLER");
 
   /* User can add his own implementation to report the HAL error return state */
   while(1)
