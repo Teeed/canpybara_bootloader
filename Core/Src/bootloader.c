@@ -58,23 +58,25 @@ static void canpybara_bootloader_active_loop(void)
 
 static uint8_t canpybara_ignore_address(uint32_t address)
 {
-	// if(! canpybara_bootloader_enabled)
-	// {
-	// 	return 1;
-	// }
+	if(! canpybara_bootloader_enabled)
+	{
+		LOG("Tired bootloader CMD with bootloader not enabled, ignoring");
+
+		return 1;
+	}
 
 	LOG("Addr req: %"PRIu32, address);
 
 	if(address < BOOTLOADER_APP_START_ADDR)
 	{
-		LOG("Too low");
+		LOG("Too low, ignoring");
 
 		return 1;
 	}
 
 	if(address > BOOTLOADER_APP_END_ADDR)
 	{
-		LOG("Too high");
+		LOG("Too high, ignoring");
 
 		return 1;
 	}
