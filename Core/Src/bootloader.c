@@ -91,15 +91,14 @@ void canpybara_bootloader_erase(uint32_t addr)
 		return;
 	}
 
-	HAL_FLASH_Unlock();
 	FLASH_EraseInitTypeDef erase_init_struct;
 	erase_init_struct.TypeErase = FLASH_TYPEERASE_PAGES;
 	erase_init_struct.PageAddress = addr;
 	erase_init_struct.NbPages = 1;
 
 	uint32_t page_error;
+	HAL_FLASH_Unlock();
 	HAL_FLASHEx_Erase(&erase_init_struct, &page_error);
-
 	HAL_FLASH_Lock();
 
 	static CanTxMsgTypeDef can_tx;
