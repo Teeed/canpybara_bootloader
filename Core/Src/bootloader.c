@@ -38,17 +38,20 @@ void canpybara_bootloader_enable(void)
 
 void canpybara_bootloader_send_discovery(void)
 {
-	static CanTxMsgTypeDef can_tx;
-	can_tx.StdId = CANPYBARA_REPORT_BOOTLOADER;
-	can_tx.ExtId = 0;
-	can_tx.IDE = CAN_ID_STD;
-	can_tx.RTR = CAN_RTR_DATA;
+	CAN_TxHeaderTypeDef can_tx_header;
+	uint8_t can_tx_data[8];
 
-	can_tx.DLC = 1;
+	can_tx_header.StdId = CANPYBARA_REPORT_BOOTLOADER;
+	can_tx_header.ExtId = 0;
+	can_tx_header.IDE = CAN_ID_STD;
+	can_tx_header.RTR = CAN_RTR_DATA;
+	can_tx_header.DLC = 1;
+	can_tx_header.TransmitGlobalTime = DISABLE;
+
 	int i = 0;
-	can_tx.Data[i++] = 0x00; // protocol version 00
+	can_tx_data[i++] = 0x00; // protocol version 00
 
-	canpybara_can_tx(&can_tx);
+	canpybara_can_tx(&can_tx_header, can_tx_data);
 }
 
 static void canpybara_bootloader_active_loop(void)
@@ -101,17 +104,21 @@ void canpybara_bootloader_erase(uint32_t addr)
 	HAL_FLASHEx_Erase(&erase_init_struct, &page_error);
 	HAL_FLASH_Lock();
 
-	static CanTxMsgTypeDef can_tx;
-	can_tx.StdId = CANPYBARA_REPORT_BOOTLOADER_ERASE;
-	can_tx.ExtId = 0;
-	can_tx.IDE = CAN_ID_STD;
-	can_tx.RTR = CAN_RTR_DATA;
+	CAN_TxHeaderTypeDef can_tx_header;
+	uint8_t can_tx_data[8];
 
-	can_tx.DLC = 1;
+	can_tx_header.StdId = CANPYBARA_REPORT_BOOTLOADER_ERASE;
+	can_tx_header.ExtId = 0;
+	can_tx_header.IDE = CAN_ID_STD;
+	can_tx_header.RTR = CAN_RTR_DATA;
+	can_tx_header.DLC = 1;
+	can_tx_header.TransmitGlobalTime = DISABLE;
+
 	int i = 0;
-	can_tx.Data[i++] = page_error == 0xFFFFFFFF; 
+	can_tx_data[i++] = page_error == 0xFFFFFFFF; 
 
-	canpybara_can_tx(&can_tx);
+	canpybara_can_tx(&can_tx_header, can_tx_data);
+
 	canpybara_bootloader_last_active = HAL_GetTick();
 	canpybara_bootloader_addr = addr;
 }
@@ -128,17 +135,21 @@ void canpybara_bootloader_write(uint64_t bytes)
 	HAL_StatusTypeDef result = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, canpybara_bootloader_addr, bytes);
 	HAL_FLASH_Lock();
 
-	static CanTxMsgTypeDef can_tx;
-	can_tx.StdId = CANPYBARA_REPORT_BOOTLOADER_WRITE;
-	can_tx.ExtId = 0;
-	can_tx.IDE = CAN_ID_STD;
-	can_tx.RTR = CAN_RTR_DATA;
+	CAN_TxHeaderTypeDef can_tx_header;
+	uint8_t can_tx_data[8];
 
-	can_tx.DLC = 1;
+	can_tx_header.StdId = CANPYBARA_REPORT_BOOTLOADER_WRITE;
+	can_tx_header.ExtId = 0;
+	can_tx_header.IDE = CAN_ID_STD;
+	can_tx_header.RTR = CAN_RTR_DATA;
+	can_tx_header.DLC = 1;
+	can_tx_header.TransmitGlobalTime = DISABLE;
+
 	int i = 0;
-	can_tx.Data[i++] = result != HAL_ERROR; 
+	can_tx_data[i++] = result != HAL_ERROR; 
 
-	canpybara_can_tx(&can_tx);
+	canpybara_can_tx(&can_tx_header, can_tx_data);
+
 	canpybara_bootloader_last_active = HAL_GetTick();
 	canpybara_bootloader_addr += sizeof(uint64_t);
 }
